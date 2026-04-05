@@ -38,7 +38,7 @@ except Exception as e:  # pragma: no cover
 try:
     from ..models import SatelliteSchedulerAction, SatelliteSchedulerObservation
     from .satellite_scheduler_environment import SatelliteSchedulerEnvironment
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     from models import SatelliteSchedulerAction, SatelliteSchedulerObservation
     from server.satellite_scheduler_environment import SatelliteSchedulerEnvironment
 
@@ -76,9 +76,9 @@ def main(host: str = "0.0.0.0", port: int = 8000):
 
 
 if __name__ == "__main__":
-    import argparse
+    # import argparse
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000)
-    args = parser.parse_args()
-    main(port=args.port)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--port", type=int, default=8000)
+    # args = parser.parse_args()
+    main()

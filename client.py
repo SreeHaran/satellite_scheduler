@@ -6,13 +6,17 @@
 
 """Satellite Scheduler Environment Client."""
 
-from typing import Dict
+from typing import Dict, List
 
 from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
-from .models import SatelliteSchedulerAction, SatelliteSchedulerObservation
+from models import (
+    SatelliteSchedulerAction,
+    SatelliteSchedulerObservation,
+    TargetRequest,
+)
 
 
 class SatelliteSchedulerEnv(
@@ -21,57 +25,45 @@ class SatelliteSchedulerEnv(
     """
     Client for the Satellite Scheduler Environment.
 
-    This client maintains a persistent WebSocket connection to the environment server,
-    enabling efficient multi-step interactions with lower latency.
-    Each client instance has its own dedicated environment session on the server.
-
     Example:
-        >>> # Connect to a running server
         >>> with SatelliteSchedulerEnv(base_url="http://localhost:8000") as client:
         ...     result = client.reset()
-        ...     print(result.observation.echoed_message)
+        ...     print(result.observation.battery_level)
         ...
-        ...     result = client.step(SatelliteSchedulerAction(message="Hello!"))
-        ...     print(result.observation.echoed_message)
-
-    Example with Docker:
-        >>> # Automatically start container and connect
-        >>> client = SatelliteSchedulerEnv.from_docker_image("satellite_scheduler-env:latest")
-        >>> try:
-        ...     result = client.reset()
-        ...     result = client.step(SatelliteSchedulerAction(message="Test"))
-        ... finally:
-        ...     client.close()
+        ...     action = SatelliteSchedulerAction(action_type="wait")
+        ...     result = client.step(action)
+        ...     print(result.observation.current_time)
     """
 
     def _step_payload(self, action: SatelliteSchedulerAction) -> Dict:
-        """
-        Convert SatelliteSchedulerAction to JSON payload for step message.
-
-        Args:
-            action: SatelliteSchedulerAction instance
-
-        Returns:
-            Dictionary representation suitable for JSON encoding
-        """
-        return {
-            "message": action.message,
-        }
+        payload: Dict = {"action_type": action.action_type.value}
+        if action.target_id is not None:
+            payload["target_id"] = action.target_id
+        if action.destination is not None:
+            payload["destination"] = action.destination
+        return payload
 
     def _parse_result(self, payload: Dict) -> StepResult[SatelliteSchedulerObservation]:
-        """
-        Parse server response into StepResult[SatelliteSchedulerObservation].
-
-        Args:
-            payload: JSON response data from server
-
-        Returns:
-            StepResult with SatelliteSchedulerObservation
-        """
         obs_data = payload.get("observation", {})
+
+        request_queue_raw: List = obs_data.get("pending_request_queue", [])
+        request_queue = [
+            TargetRequest(**r) if isinstance(r, dict) else r for r in request_queue_raw
+        ]
+
         observation = SatelliteSchedulerObservation(
-            echoed_message=obs_data.get("echoed_message", ""),
-            message_length=obs_data.get("message_length", 0),
+            current_time=obs_data.get("current_time", 0),
+            attitude=obs_data.get("attitude", "sun"),
+            busy_status=obs_data.get("busy_status", "idle"),
+            remaining_action_steps=obs_data.get("remaining_action_steps", 0),
+            battery_level=obs_data.get("battery_level", 0.0),
+            storage_used=obs_data.get("storage_used", 0.0),
+            raw_data_amount=obs_data.get("raw_data_amount", 0.0),
+            compressed_data_amount=obs_data.get("compressed_data_amount", 0.0),
+            sunlit_status=obs_data.get("sunlit_status", True),
+            ground_station_visible=obs_data.get("ground_station_visible", False),
+            pending_request_queue=request_queue,
+            current_selected_request_id=obs_data.get("current_selected_request_id"),
             done=payload.get("done", False),
             reward=payload.get("reward"),
             metadata=obs_data.get("metadata", {}),
@@ -84,15 +76,6 @@ class SatelliteSchedulerEnv(
         )
 
     def _parse_state(self, payload: Dict) -> State:
-        """
-        Parse server response into State object.
-
-        Args:
-            payload: JSON response from state request
-
-        Returns:
-            State object with episode_id and step_count
-        """
         return State(
             episode_id=payload.get("episode_id"),
             step_count=payload.get("step_count", 0),

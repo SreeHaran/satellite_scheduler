@@ -7,10 +7,28 @@
 """Satellite Scheduler Environment."""
 
 from .client import SatelliteSchedulerEnv
-from .models import SatelliteSchedulerAction, SatelliteSchedulerObservation
+from .grader import grade_all, grade_easy, grade_hard, grade_medium
+from .models import (
+    ActionType,
+    ImagingMode,
+    Priority,
+    RequestStatus,
+    SatelliteSchedulerAction,
+    SatelliteSchedulerObservation,
+    TargetRequest,
+)
 
 __all__ = [
+    "ActionType",
+    "ImagingMode",
+    "Priority",
+    "RequestStatus",
     "SatelliteSchedulerAction",
     "SatelliteSchedulerObservation",
     "SatelliteSchedulerEnv",
+    "TargetRequest",
+    "grade_easy",
+    "grade_medium",
+    "grade_hard",
+    "grade_all",
 ]
