@@ -16,9 +16,9 @@ Three difficulty levels defined by the spec:
 from typing import Any, Dict
 
 try:
-    from .models import PRIORITY_WEIGHT, STORAGE_CAPACITY, SUN_CHARGE_PER_STEP
+    from .models import PRIORITY_WEIGHT, SUN_CHARGE_PER_STEP
 except ImportError:
-    from models import PRIORITY_WEIGHT, STORAGE_CAPACITY, SUN_CHARGE_PER_STEP  # type: ignore[no-redef]
+    from models import PRIORITY_WEIGHT, SUN_CHARGE_PER_STEP  # type: ignore[no-redef]
 
 # Statuses considered "completed" for priority scoring
 _COMPLETED_STATUSES = {"captured", "compressed", "downlinked"}
