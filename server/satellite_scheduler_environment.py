@@ -151,11 +151,8 @@ class SatelliteSchedulerEnvironment(Environment):
         self._current_action_type: Optional[str] = None
         self._slew_destination: Optional[str] = None  # where we are slewing to
 
-        self._sun_point_slew_steps_left: int = (
-            0  # slew steps remaining within sun-pointing
-        )
-        self._downlink_slew_steps_left: int = 0  # slew steps remaining within downlink
-        self._capture_slew_steps_left: int = 0  # slew steps remaining within capture
+        # Single shared slew-phase counter; only one action can be active at a time.
+        self._slew_steps_left: int = 0
 
         # Reward tracking accumulators (for per-step reward)
         self._total_data_downlinked: float = 0.0
@@ -444,7 +441,7 @@ class SatelliteSchedulerEnvironment(Environment):
         self._remaining_action_steps = 0
         self._current_action_type = None
         self._slew_destination = None
-        self._capture_slew_steps_left = (
+        self._slew_steps_left = (
             0  # TODO: check where the satellite is pointing where abort performed
         )
         self._total_aborts += 1
@@ -550,7 +547,7 @@ class SatelliteSchedulerEnvironment(Environment):
         slew_steps = SLEW_STEPS.get(src_cat, {}).get("target", 0)
 
         self._current_selected_request_id = target_id
-        self._capture_slew_steps_left = slew_steps
+        self._slew_steps_left = slew_steps
         steps_needed = CAPTURE_TIME_STEPS[mode]
         self._remaining_action_steps = slew_steps + steps_needed
         self._busy_status = "capturing"
@@ -564,10 +561,10 @@ class SatelliteSchedulerEnvironment(Environment):
         self._remaining_action_steps -= 1
 
         # Phase 1: internal slew to target
-        if self._capture_slew_steps_left > 0:
-            self._capture_slew_steps_left -= 1
+        if self._slew_steps_left > 0:
+            self._slew_steps_left -= 1
 
-            if self._capture_slew_steps_left == 0:
+            if self._slew_steps_left == 0:
                 self._attitude = f"target_{self._current_selected_request_id}"
 
             return 0.0 if alive else -1.0
@@ -586,7 +583,7 @@ class SatelliteSchedulerEnvironment(Environment):
             self._busy_status = "idle"
             self._remaining_action_steps = 0
             self._current_action_type = None
-            self._capture_slew_steps_left = 0
+            self._slew_steps_left = 0
 
             return 0.3 * (
                 PRIORITY_WEIGHT.get(req.priority.value, 1.0) / 3.0 if req else 0.0
@@ -622,7 +619,7 @@ class SatelliteSchedulerEnvironment(Environment):
         )
         total_steps = slew_steps + downlink_data_steps
 
-        self._downlink_slew_steps_left = slew_steps
+        self._slew_steps_left = slew_steps
         self._remaining_action_steps = total_steps
         self._busy_status = "downlinking"
         self._current_action_type = "downlink"
@@ -633,12 +630,12 @@ class SatelliteSchedulerEnvironment(Environment):
     def _continue_downlink(self) -> float:
         self._current_time += DOWNLINK_STEP_TIME_SEC
 
-        if self._downlink_slew_steps_left > 0:
+        if self._slew_steps_left > 0:
             # Still slewing to GS — costs slew battery
             self._drain_battery(SLEW_BATTERY_PER_STEP)
-            self._downlink_slew_steps_left -= 1
+            self._slew_steps_left -= 1
             self._remaining_action_steps -= 1
-            if self._downlink_slew_steps_left <= 0:
+            if self._slew_steps_left <= 0:
                 self._attitude = "gs"
             return 0.0
 
@@ -659,7 +656,7 @@ class SatelliteSchedulerEnvironment(Environment):
             self._remaining_action_steps = 0
             self._current_action_type = None
             self._slew_destination = None
-            self._downlink_slew_steps_left = 0
+            self._slew_steps_left = 0
 
         return reward
 
@@ -686,7 +683,7 @@ class SatelliteSchedulerEnvironment(Environment):
         )
         total_steps = slew_steps + charge_steps
 
-        self._sun_point_slew_steps_left = slew_steps
+        self._slew_steps_left = slew_steps
         self._remaining_action_steps = total_steps
         self._busy_status = "sun_pointing"
         self._current_action_type = "sun_point"
@@ -697,12 +694,12 @@ class SatelliteSchedulerEnvironment(Environment):
     def _continue_sun_point(self) -> float:
         self._current_time += SUN_POINT_STEP_TIME_SEC
 
-        if self._sun_point_slew_steps_left > 0:
+        if self._slew_steps_left > 0:
             # Still slewing to sun — costs battery
             self._drain_battery(SLEW_BATTERY_PER_STEP)
-            self._sun_point_slew_steps_left -= 1
+            self._slew_steps_left -= 1
             self._remaining_action_steps -= 1
-            if self._sun_point_slew_steps_left <= 0:
+            if self._slew_steps_left <= 0:
                 self._attitude = "sun"
             reward = 0.0
         else:
@@ -723,7 +720,7 @@ class SatelliteSchedulerEnvironment(Environment):
             self._remaining_action_steps = 0
             self._current_action_type = None
             self._slew_destination = None
-            self._sun_point_slew_steps_left = 0
+            self._slew_steps_left = 0
 
         return reward
 
