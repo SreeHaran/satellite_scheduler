@@ -13,7 +13,7 @@ charge its battery, and downlink results within a 90-minute episode.
 
 import math
 import random
-from typing import Dict, List, Optional
+from typing import List, Optional
 from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
@@ -150,10 +150,12 @@ class SatelliteSchedulerEnvironment(Environment):
         # Internal tracking for the current multi-step action
         self._current_action_type: Optional[str] = None
         self._slew_destination: Optional[str] = None  # where we are slewing to
+
         self._sun_point_slew_steps_left: int = (
             0  # slew steps remaining within sun-pointing
         )
         self._downlink_slew_steps_left: int = 0  # slew steps remaining within downlink
+        self._capture_slew_steps_left: int = 0  # slew steps remaining within capture
 
         # Reward tracking accumulators (for per-step reward)
         self._total_data_downlinked: float = 0.0
@@ -260,7 +262,7 @@ class SatelliteSchedulerEnvironment(Environment):
     def _drain_battery(self, amount: float) -> bool:
         """Drain battery. Returns False if battery would go to zero (episode ends)."""
         self._battery_level -= amount
-        if self._battery_level <= 0:
+        if self._battery_level <= 1:
             self._battery_level = 0.0
             return False
         return True
@@ -305,7 +307,7 @@ class SatelliteSchedulerEnvironment(Environment):
             done = True
 
         # Battery death - terminate the episode
-        if self._battery_level <= 0:
+        if self._battery_level <= 1:
             done = True
             reward = -10.0
 
@@ -413,8 +415,6 @@ class SatelliteSchedulerEnvironment(Environment):
             reward = self._do_compress_start()
         elif at == ActionType.DOWNLINK_TO_STATION:
             reward = self._do_downlink_start()
-        elif at == ActionType.SLEW_TO_TARGET:
-            reward = self._do_slew_start(action.target_id, action.destination)
         elif at == ActionType.CAPTURE_IMAGE:
             reward = self._do_capture_start(action.target_id)
         else:
@@ -444,6 +444,9 @@ class SatelliteSchedulerEnvironment(Environment):
         self._remaining_action_steps = 0
         self._current_action_type = None
         self._slew_destination = None
+        self._capture_slew_steps_left = (
+            0  # TODO: check where the satellite is pointing where abort performed
+        )
         self._total_aborts += 1
         return -0.1 * ABORT_PENALTY
 
@@ -521,13 +524,6 @@ class SatelliteSchedulerEnvironment(Environment):
             self._drain_battery(WAIT_BATTERY_COST)
             return -0.4
 
-        expected_attitude = f"target_{target_id}"
-        if self._attitude != expected_attitude:
-            self._total_invalid_actions += 1
-            self._current_time += STEP_DURATION_SEC
-            self._drain_battery(WAIT_BATTERY_COST)
-            return -0.4
-
         if req.status != RequestStatus.PENDING:
             self._total_invalid_actions += 1
             self._current_time += STEP_DURATION_SEC
@@ -550,9 +546,13 @@ class SatelliteSchedulerEnvironment(Environment):
             self._drain_battery(WAIT_BATTERY_COST)
             return -0.15
 
+        src_cat = _attitude_category(self._attitude)
+        slew_steps = SLEW_STEPS.get(src_cat, {}).get("target", 0)
+
         self._current_selected_request_id = target_id
+        self._capture_slew_steps_left = slew_steps
         steps_needed = CAPTURE_TIME_STEPS[mode]
-        self._remaining_action_steps = steps_needed
+        self._remaining_action_steps = slew_steps + steps_needed
         self._busy_status = "capturing"
         self._current_action_type = "capture"
 
@@ -563,8 +563,17 @@ class SatelliteSchedulerEnvironment(Environment):
         alive = self._drain_battery(CAPTURE_STEP_BATTERY_COST)
         self._remaining_action_steps -= 1
 
+        # Phase 1: internal slew to target
+        if self._capture_slew_steps_left > 0:
+            self._capture_slew_steps_left -= 1
+
+            if self._capture_slew_steps_left == 0:
+                self._attitude = f"target_{self._current_selected_request_id}"
+
+            return 0.0 if alive else -1.0
+
+        # Phase 2: actual capture
         if self._remaining_action_steps <= 0:
-            # Capture complete
             req = self._get_request(self._current_selected_request_id)  # type: ignore[arg-type]
             if req is not None:
                 mode = req.imaging_mode.value
@@ -577,12 +586,13 @@ class SatelliteSchedulerEnvironment(Environment):
             self._busy_status = "idle"
             self._remaining_action_steps = 0
             self._current_action_type = None
-            # Reward for image captured (normalized)
+            self._capture_slew_steps_left = 0
+
             return 0.3 * (
                 PRIORITY_WEIGHT.get(req.priority.value, 1.0) / 3.0 if req else 0.0
             )
 
-        return 0.0
+        return 0.0 if alive else -1.0
 
     # ---- DOWNLINK ----
     def _do_downlink_start(self) -> float:

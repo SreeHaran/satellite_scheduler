@@ -35,7 +35,7 @@ with SatelliteSchedulerEnv(base_url="http://localhost:8000").sync() as env:
 
     # Slew to target 1
     result = env.step(
-        SatelliteSchedulerAction(action_type=ActionType.SLEW_TO_TARGET, target_id=1)
+        SatelliteSchedulerAction(action_type=ActionType.WAIT)
     )
     print(f"Attitude: {result.observation.attitude}")
 ```
@@ -54,13 +54,12 @@ with SatelliteSchedulerEnv(base_url="http://localhost:8000").sync() as env:
 
 | # | Action | Parameters | Purpose |
 |---|--------|------------|---------|
-| 1 | `slew_to_target` | `target_id` | Repoint satellite to a target |
+| 1 | `wait` | — | Do nothing for one step |
 | 2 | `capture_image` | `target_id` | Capture imaging data for a target |
 | 3 | `downlink_to_station` | — | Transmit compressed data to ground |
 | 4 | `sun_point_for_charging` | — | Charge battery via solar panels |
 | 5 | `compress_data` | — | Compress raw data on board |
 | 6 | `abort_task` | — | Cancel current multi-step action |
-| 7 | `wait` | — | Do nothing for one step |
 
 ## State Variables
 

@@ -64,7 +64,7 @@ SYSTEM_PROMPT = textwrap.dedent(
     You are an AI agent controlling a satellite for mission-critical imaging and data downlink.
     Your goal: Capture priority targets, compress data, downlink to ground station, and manage battery.
     
-    Available actions: wait, abort_task, sun_point_for_charging, compress_data, downlink_to_station, slew_to_target, capture_image
+    Available actions: wait, abort_task, sun_point_for_charging, compress_data, downlink_to_station, capture_image
     
     Strategy tips:
     - Prioritize high-priority targets
@@ -120,7 +120,6 @@ def parse_action_from_text(text: str) -> Optional[SatelliteSchedulerAction]:
         "charge": ActionType.SUN_POINT_FOR_CHARGING,
         "compress": ActionType.COMPRESS_DATA,
         "downlink": ActionType.DOWNLINK_TO_STATION,
-        "slew": ActionType.SLEW_TO_TARGET,
         "capture": ActionType.CAPTURE_IMAGE,
         "image": ActionType.CAPTURE_IMAGE,
     }

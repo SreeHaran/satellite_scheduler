@@ -29,7 +29,6 @@ class ActionType(str, Enum):
     SUN_POINT_FOR_CHARGING = "sun_point_for_charging"
     COMPRESS_DATA = "compress_data"
     DOWNLINK_TO_STATION = "downlink_to_station"
-    SLEW_TO_TARGET = "slew_to_target"
     CAPTURE_IMAGE = "capture_image"
 
 
@@ -84,11 +83,7 @@ class SatelliteSchedulerAction(Action):
     action_type: ActionType = Field(..., description="The type of action to perform")
     target_id: Optional[int] = Field(
         default=None,
-        description="Target request ID (required for capture_image, used with slew_to_target for imaging targets)",
-    )
-    destination: Optional[str] = Field(
-        default=None,
-        description="Slew destination: 'sun', 'gs', or omit when using target_id (only for slew_to_target)",
+        description="Target request ID (required for capture_image to slew to target)",
     )
 
 
