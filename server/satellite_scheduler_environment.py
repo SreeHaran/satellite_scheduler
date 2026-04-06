@@ -57,6 +57,7 @@ try:
         RequestStatus,
         SatelliteSchedulerAction,
         SatelliteSchedulerObservation,
+        SatelliteSchedulerState,
         TargetRequest,
     )
 except ImportError:
@@ -97,6 +98,7 @@ except ImportError:
         RequestStatus,
         SatelliteSchedulerAction,
         SatelliteSchedulerObservation,
+        SatelliteSchedulerState,
         TargetRequest,
     )
 
@@ -124,7 +126,7 @@ class SatelliteSchedulerEnvironment(Environment):
     def __init__(self, seed: Optional[int] = None) -> None:
         self._seed = seed
         self._rng = random.Random(seed)
-        self._state = State(episode_id=str(uuid4()), step_count=0)
+        self._state = SatelliteSchedulerState(episode_id=str(uuid4()), step_count=0)
         self._init_env_state()
 
     # ------------------------------------------------------------------
@@ -268,7 +270,7 @@ class SatelliteSchedulerEnvironment(Environment):
     # ------------------------------------------------------------------
 
     def reset(self) -> SatelliteSchedulerObservation:
-        self._state = State(episode_id=str(uuid4()), step_count=0)
+        self._state = SatelliteSchedulerState(episode_id=str(uuid4()), step_count=0)
         self._init_env_state()
         self._pending_request_queue = self._generate_requests()
         self._update_orbital_state()
@@ -310,14 +312,10 @@ class SatelliteSchedulerEnvironment(Environment):
         return self._build_observation(reward=reward, done=done)
 
     @property
-    def state(self) -> State:
-        return self._state
-
-    @property
-    def episode_stats(self) -> dict:
-        """Return accumulated episode statistics for grader evaluation."""
+    def state(self) -> SatelliteSchedulerState:
+        """Return current session state including accumulated episode statistics."""
         total_steps = max(1, self._total_steps_recorded)
-        return {
+        self._state.episode_stats = {
             "total_steps": total_steps,
             "total_data_downlinked": self._total_data_downlinked,
             "total_data_generated": self._total_data_generated,
@@ -331,6 +329,7 @@ class SatelliteSchedulerEnvironment(Environment):
             "overflow_events": self._overflow_events,
             "requests": [r.model_dump() for r in self._pending_request_queue],
         }
+        return self._state
 
     # ------------------------------------------------------------------
     # Grader metric collection

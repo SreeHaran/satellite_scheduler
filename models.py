@@ -14,7 +14,7 @@ scheduling RL environment with imaging, compression, downlink, and charging.
 from enum import Enum
 from typing import List, Optional
 
-from openenv.core.env_server.types import Action, Observation
+from openenv.core.env_server.types import Action, Observation, State
 from pydantic import BaseModel, Field
 
 
@@ -127,6 +127,20 @@ class SatelliteSchedulerObservation(Observation):
     )
     current_selected_request_id: Optional[int] = Field(
         default=None, description="Currently selected request ID"
+    )
+
+
+class SatelliteSchedulerState(State):
+    """Extended environment state including post-episode statistics.
+
+    Returned by the environment's ``state`` property. After episode end,
+    ``episode_stats`` contains the accumulated grading metrics; during an
+    episode it is an empty dict.
+    """
+
+    episode_stats: dict = Field(
+        default_factory=dict,
+        description="Accumulated episode statistics for grader evaluation",
     )
 
 

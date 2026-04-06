@@ -15,6 +15,7 @@ from .models import (
     RequestStatus,
     SatelliteSchedulerAction,
     SatelliteSchedulerObservation,
+    SatelliteSchedulerState,
     TargetRequest,
 )
 
@@ -25,6 +26,7 @@ __all__ = [
     "RequestStatus",
     "SatelliteSchedulerAction",
     "SatelliteSchedulerObservation",
+    "SatelliteSchedulerState",
     "SatelliteSchedulerEnv",
     "TargetRequest",
     "grade_easy",

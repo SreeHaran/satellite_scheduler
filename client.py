@@ -10,17 +10,19 @@ from typing import Dict, List
 
 from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
-from openenv.core.env_server.types import State
 
 from models import (
     SatelliteSchedulerAction,
     SatelliteSchedulerObservation,
+    SatelliteSchedulerState,
     TargetRequest,
 )
 
 
 class SatelliteSchedulerEnv(
-    EnvClient[SatelliteSchedulerAction, SatelliteSchedulerObservation, State]
+    EnvClient[
+        SatelliteSchedulerAction, SatelliteSchedulerObservation, SatelliteSchedulerState
+    ]
 ):
     """
     Client for the Satellite Scheduler Environment.
@@ -75,8 +77,9 @@ class SatelliteSchedulerEnv(
             done=payload.get("done", False),
         )
 
-    def _parse_state(self, payload: Dict) -> State:
-        return State(
+    def _parse_state(self, payload: Dict) -> SatelliteSchedulerState:
+        return SatelliteSchedulerState(
             episode_id=payload.get("episode_id"),
             step_count=payload.get("step_count", 0),
+            episode_stats=payload.get("episode_stats", {}),
         )

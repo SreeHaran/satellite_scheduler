@@ -31,7 +31,7 @@ import textwrap
 from typing import List, Optional
 
 from openai import OpenAI
-from models import SatelliteSchedulerAction
+from models import SatelliteSchedulerAction, ActionType
 from client import SatelliteSchedulerEnv
 from grader import grade_all
 
@@ -50,7 +50,7 @@ MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 TASK_NAME = os.getenv("SATELLITE_SCHEDULER_TASK", "satellite_mission_planning")
 BENCHMARK = os.getenv("SATELLITE_SCHEDULER_BENCHMARK", "satellite_scheduler")
 
-MAX_STEPS = 180
+MAX_STEPS = 50  # Reduced to meet hackathon requirements of execution within 20 minutes(in vcpu=2, memory=8gb), Its best to run with 180 steps (considering 2 hour window for the satellite)
 TEMPERATURE = 0.7
 MAX_TOKENS = 200
 SUCCESS_SCORE_THRESHOLD = 0.5
@@ -114,15 +114,15 @@ def parse_action_from_text(text: str) -> Optional[SatelliteSchedulerAction]:
 
     # Map common patterns to actions
     action_mappings = {
-        "wait": ActionType.wait,
-        "abort": ActionType.abort_task,
-        "sun_point": ActionType.sun_point_for_charging,
-        "charge": ActionType.sun_point_for_charging,
-        "compress": ActionType.compress_data,
-        "downlink": ActionType.downlink_to_station,
-        "slew": ActionType.slew_to_target,
-        "capture": ActionType.capture_image,
-        "image": ActionType.capture_image,
+        "wait": ActionType.WAIT,
+        "abort": ActionType.ABORT_TASK,
+        "sun_point": ActionType.SUN_POINT_FOR_CHARGING,
+        "charge": ActionType.SUN_POINT_FOR_CHARGING,
+        "compress": ActionType.COMPRESS_DATA,
+        "downlink": ActionType.DOWNLINK_TO_STATION,
+        "slew": ActionType.SLEW_TO_TARGET,
+        "capture": ActionType.CAPTURE_IMAGE,
+        "image": ActionType.CAPTURE_IMAGE,
     }
 
     for keyword, action_type in action_mappings.items():
@@ -220,10 +220,10 @@ async def main() -> None:
                 client,
                 step,
                 obs.current_time,
-                obs.battery,
-                obs.storage / 100.0,  # normalize to 0-100
-                obs.is_sunlit,
-                obs.gs_visible,
+                obs.battery_level,
+                obs.storage_used,
+                obs.sunlit_status,
+                obs.ground_station_visible,
                 len(obs.pending_request_queue),
                 last_reward,
                 history,
@@ -257,9 +257,10 @@ async def main() -> None:
                 break
 
         # Use episode grade as final score
-        if steps_taken == MAX_STEPS or (result and result.done):
+        if steps_taken >= MAX_STEPS or (result and result.done):
             try:
-                episode_stats = env.episode_stats
+                state = await env.state()
+                episode_stats = state.episode_stats
                 grades = grade_all(episode_stats)
                 score = (grades["easy"] + grades["medium"] + grades["hard"]) / 3.0
                 success = score >= SUCCESS_SCORE_THRESHOLD
