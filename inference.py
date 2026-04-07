@@ -198,7 +198,7 @@ def get_model_decision(
         text = (completion.choices[0].message.content or "").strip()
         return text if text else "wait"
     except Exception as exc:
-        print(f"[DEBUG] Model request failed: {exc}", flush=True)
+        # print(f"[DEBUG] Model request failed: {exc}", flush=True)
         return "wait"
 
 
@@ -272,12 +272,12 @@ async def main() -> None:
                 grades = grade_all(episode_stats)
                 score = (grades["easy"] + grades["medium"] + grades["hard"]) / 3.0
                 success = score >= SUCCESS_SCORE_THRESHOLD
-                print(
-                    f"[DEBUG] Episode grades - Easy: {grades['easy']:.3f}, Medium: {grades['medium']:.3f}, Hard: {grades['hard']:.3f}",
-                    flush=True,
-                )
+                # print(
+                #     f"[DEBUG] Episode grades - Easy: {grades['easy']:.3f}, Medium: {grades['medium']:.3f}, Hard: {grades['hard']:.3f}",
+                #     flush=True,
+                # )
             except Exception as e:
-                print(f"[DEBUG] Could not compute grades: {e}", flush=True)
+                # print(f"[DEBUG] Could not compute grades: {e}", flush=True)
                 score = sum(rewards) / len(rewards) if rewards else 0.0
                 success = score >= SUCCESS_SCORE_THRESHOLD
 
@@ -285,7 +285,8 @@ async def main() -> None:
         try:
             await env.close()
         except Exception as e:
-            print(f"[DEBUG] env.close() error (container cleanup): {e}", flush=True)
+            # print(f"[DEBUG] env.close() error (container cleanup): {e}", flush=True)
+            pass
 
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
