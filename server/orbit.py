@@ -58,13 +58,23 @@ class OrbitMixin:
         )
 
     def _expire_requests(self) -> None:
-        """Mark pending requests past their deadline as expired."""
+        """Mark pending requests past their deadline as expired, then prune the queue.
+
+        Requests with status EXPIRED or CAPTURED are removed from the active
+        queue; they remain accessible via the grader archive (_all_requests).
+        """
         for req in self._pending_request_queue:
             if (
                 req.status == RequestStatus.PENDING
                 and self._current_time > req.deadline
             ):
                 req.status = RequestStatus.EXPIRED
+
+        self._pending_request_queue = [
+            req
+            for req in self._pending_request_queue
+            if req.status == RequestStatus.PENDING
+        ]
 
     def _generate_request(self, arrival: int) -> TargetRequest:
         """Generate a randomised imaging request for the episode."""

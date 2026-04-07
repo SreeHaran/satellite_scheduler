@@ -19,7 +19,6 @@ try:
         SUN_POINT_STEP_TIME_SEC,
         WAIT_BATTERY_COST,
     )
-    from ..orbit import _attitude_category
 except ImportError:
     from models import (  # type: ignore[no-redef]
         BATTERY_MAX,
@@ -31,7 +30,7 @@ except ImportError:
         SUN_POINT_STEP_TIME_SEC,
         WAIT_BATTERY_COST,
     )
-    from orbit import _attitude_category  # type: ignore[no-redef]
+from ..orbit import _attitude_category
 
 
 class SunPointMixin:

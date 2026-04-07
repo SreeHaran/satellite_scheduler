@@ -109,6 +109,7 @@ class SatelliteSchedulerEnvironment(
         self._sunlit_status: bool = True
         self._ground_station_visible: bool = False
         self._pending_request_queue: List[TargetRequest] = []
+        self._all_requests: List[TargetRequest] = []  # archive for grader tracking
         self._current_selected_request_id: Optional[int] = None
 
         # Internal tracking for the current multi-step action
@@ -188,6 +189,7 @@ class SatelliteSchedulerEnvironment(
         self._state = SatelliteSchedulerState(episode_id=str(uuid4()), step_count=0)
         self._init_env_state()
         self._pending_request_queue = []
+        self._all_requests = []
         self._update_orbital_state()
         return self._build_observation(reward=0.0, done=False)
 
@@ -199,12 +201,13 @@ class SatelliteSchedulerEnvironment(
         if self._step_number % 5 == 0:
             last_5_minutes = EPISODE_DURATION_SEC - 300
             if (
-                len(self._pending_request_queue) < 5  # no more than 5 requests
+                len(self._pending_request_queue) < 7  # no more than 7 requests
                 and self._current_time < last_5_minutes  # less than 5 minutes left
                 and self._rng.random() < 0.9  # 90% chance to generate a new request
             ):
                 new_request = self._generate_request(self._current_time)
                 self._pending_request_queue.append(new_request)
+                self._all_requests.append(new_request)
 
         # Record pre-action state for grader metrics
         self._record_step_metrics(action.action_type)
@@ -251,7 +254,7 @@ class SatelliteSchedulerEnvironment(
             "storage_high_steps": self._storage_high_steps,
             "stalled_raw_steps": self._stalled_raw_steps,
             "overflow_events": self._overflow_events,
-            "requests": [r.model_dump() for r in self._pending_request_queue],
+            "requests": [r.model_dump() for r in self._all_requests],
         }
         return self._state
 

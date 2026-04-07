@@ -22,7 +22,6 @@ try:
         WAIT_BATTERY_COST,
         RequestStatus,
     )
-    from ..orbit import _attitude_category
 except ImportError:
     from models import (  # type: ignore[no-redef]
         CAPTURE_BATTERY_COST,
@@ -37,7 +36,7 @@ except ImportError:
         WAIT_BATTERY_COST,
         RequestStatus,
     )
-    from orbit import _attitude_category  # type: ignore[no-redef]
+from ..orbit import _attitude_category  # type: ignore[no-redef]
 
 
 class CaptureMixin:

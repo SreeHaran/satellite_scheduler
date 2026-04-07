@@ -19,7 +19,6 @@ try:
         STEP_DURATION_SEC,
         WAIT_BATTERY_COST,
     )
-    from ..orbit import _attitude_category
 except ImportError:
     from models import (  # type: ignore[no-redef]
         DOWNLINK_MIN_BATTERY,
@@ -31,7 +30,7 @@ except ImportError:
         STEP_DURATION_SEC,
         WAIT_BATTERY_COST,
     )
-    from orbit import _attitude_category  # type: ignore[no-redef]
+from ..orbit import _attitude_category
 
 
 class DownlinkMixin:

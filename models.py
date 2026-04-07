@@ -143,9 +143,11 @@ class SatelliteSchedulerState(State):
 # Constants (shared between server and client for reference)
 # ---------------------------------------------------------------------------
 
-EPISODE_DURATION_SEC = 5400  # 90 minutes
+EPISODE_DURATION_SEC = 1500  # 25 minutes for hackathon. But should be 90 minutes
 STEP_DURATION_SEC = 30
-MAX_STEPS = EPISODE_DURATION_SEC // STEP_DURATION_SEC  # 180
+MAX_STEPS = (
+    EPISODE_DURATION_SEC // STEP_DURATION_SEC
+)  # 50 for hackathon, but should be 180 for 90-minute episode
 
 BATTERY_MAX = 100.0
 STORAGE_CAPACITY = 30.0  # GB
@@ -161,36 +163,36 @@ SLEW_STEPS = {
 
 # Capture
 CAPTURE_STEP_TIME_SEC = 30
-CAPTURE_STEP_BATTERY_COST = 1.0
+CAPTURE_STEP_BATTERY_COST = 3
 CAPTURE_TIME_STEPS = {"low": 1, "medium": 2, "high": 3}
-CAPTURE_BATTERY_COST = {"low": 1.0, "medium": 2.0, "high": 3.0}
+CAPTURE_BATTERY_COST = {"low": 1.0, "medium": 2.0, "high": 2.0}
 CAPTURE_DATA_SIZE = {"low": 5.0, "medium": 10.0, "high": 15.0}
 
 # Downlink
 DOWNLINK_STEP_TIME_SEC = 30
-DOWNLINK_STEP_BATTERY_COST = 1.2
+DOWNLINK_STEP_BATTERY_COST = 4
 DOWNLINK_STEP_DATA_GB = 4.0
 DOWNLINK_MIN_BATTERY = 15.0
 
 # Sun-pointing / charging
 SUN_POINT_STEP_TIME_SEC = 30
-SUN_CHARGE_PER_STEP = 10.0
+SUN_CHARGE_PER_STEP = 7
 
 # Compression
 COMPRESS_STEP_TIME_SEC = 30
-COMPRESS_STEP_BATTERY_COST = 0.8
+COMPRESS_STEP_BATTERY_COST = 2
 COMPRESS_STEP_RAW_REDUCED = 3.0
 COMPRESS_COMPRESSION_RATIO = 0.5
 COMPRESS_MIN_BATTERY = 15.0
 
 # Abort
 ABORT_TIME_SEC = 30
-ABORT_BATTERY_COST = 0.2
+ABORT_BATTERY_COST = 2
 ABORT_PENALTY = 1.0
 
 # Wait
 WAIT_TIME_SEC = 30
-WAIT_BATTERY_COST = 0.1
+WAIT_BATTERY_COST = 1
 
 # Priority weights (for grading)
 PRIORITY_WEIGHT = {"low": 1.0, "medium": 2.0, "high": 3.0}
