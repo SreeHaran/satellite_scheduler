@@ -46,7 +46,7 @@ with SatelliteSchedulerEnv(base_url="http://localhost:8000").sync() as env:
 |---|---|
 | Episode length | 90 minutes (5 400 s) |
 | Step duration | 30 seconds |
-| Steps per episode | 180 |
+| Steps per episode | 180 (50 in inference.py to adhere hackathon requirements) |
 | Initial battery | 90 / 100 |
 | Initial attitude | sun |
 

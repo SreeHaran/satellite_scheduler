@@ -135,7 +135,7 @@ class SatelliteSchedulerEnvironment(
         self._total_steps_recorded: int = 0
         self._storage_util_sum: float = 0.0  # sum of storage_used/capacity per step
         self._battery_low_steps: int = 0  # steps with battery < 10%
-        self._storage_high_steps: int = 0  # steps with storage_used > 85 GB
+        self._storage_high_steps: int = 0  # steps with storage_used > 85% of capacity
         self._stalled_raw_steps: int = (
             0  # idle steps with raw_data > 0, not compressing
         )

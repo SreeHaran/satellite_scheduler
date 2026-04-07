@@ -30,8 +30,8 @@ class MetricsMixin:
         if self._battery_level < 10.0:
             self._battery_low_steps += 1
 
-        # Storage critically full (> 85 GB)
-        if self._storage_used > 85.0:
+        # Storage critically full (> 85% of capacity)
+        if self._storage_used > 0.85 * STORAGE_CAPACITY:
             self._storage_high_steps += 1
 
         # Sunlit window
