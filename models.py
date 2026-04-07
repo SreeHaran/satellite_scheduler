@@ -98,7 +98,7 @@ class SatelliteSchedulerObservation(Observation):
     )
     busy_status: str = Field(
         default="idle",
-        description="Current task status: idle | slewing | capturing | downlinking | sun_pointing | compressing",
+        description="Current task status: idle | capturing | downlinking | sun_pointing | compressing",
     )
     remaining_action_steps: int = Field(
         default=0, description="Steps left for the current multi-step action"
