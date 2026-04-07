@@ -6,12 +6,9 @@
 
 """Sun-pointing / charging action mixin for the Satellite Scheduler Environment."""
 
-import math
-
 try:
     from ...models import (
         BATTERY_MAX,
-        MAX_STEPS,
         SLEW_BATTERY_PER_STEP,
         SLEW_STEPS,
         STEP_DURATION_SEC,
@@ -22,7 +19,6 @@ try:
 except ImportError:
     from models import (  # type: ignore[no-redef]
         BATTERY_MAX,
-        MAX_STEPS,
         SLEW_BATTERY_PER_STEP,
         SLEW_STEPS,
         STEP_DURATION_SEC,
@@ -48,20 +44,19 @@ class SunPointMixin:
             self._current_time += STEP_DURATION_SEC
             self._drain_battery(WAIT_BATTERY_COST)
             self._total_stalling_steps += 1
-            return -0.1 * (1.0 / MAX_STEPS)
+            return -0.05
 
         src_cat = _attitude_category(self._attitude)
         slew_steps = SLEW_STEPS.get(src_cat, {}).get("sun", 0)
-        charge_steps = max(
-            1, math.ceil((BATTERY_MAX - self._battery_level) / SUN_CHARGE_PER_STEP)
-        )
-        total_steps = slew_steps + charge_steps
 
         self._slew_steps_left = slew_steps
-        self._remaining_action_steps = total_steps
-        self._busy_status = "sun_pointing"
-        self._current_action_type = "sun_point"
-        self._slew_destination = "sun"
+        self._remaining_action_steps = (
+            slew_steps  # charge is per-step; not pre-allocated
+        )
+        if slew_steps > 0:
+            self._busy_status = "sun_pointing"
+            self._current_action_type = "sun_point"
+            self._slew_destination = "sun"
 
         return self._continue_sun_point()
 
@@ -69,31 +64,29 @@ class SunPointMixin:
         self._current_time += SUN_POINT_STEP_TIME_SEC
 
         if self._slew_steps_left > 0:
-            # Still slewing to sun — costs battery
+            # Slewing phase — satellite is locked in until pointing at sun
             self._drain_battery(SLEW_BATTERY_PER_STEP)
             self._slew_steps_left -= 1
             self._remaining_action_steps -= 1
             if self._slew_steps_left <= 0:
                 self._attitude = "sun"
-            reward = 0.0
-        else:
-            # Charging phase
-            self._attitude = "sun"
-            old_battery = self._battery_level
-            self._battery_level = min(
-                self._battery_level + SUN_CHARGE_PER_STEP, BATTERY_MAX
-            )
-            gained = self._battery_level - old_battery
-            self._total_battery_gained += gained
-            self._remaining_action_steps -= 1
-            reward = 0.1 * (gained / BATTERY_MAX)
+                self._busy_status = "idle"
+                self._remaining_action_steps = 0
+                self._current_action_type = None
+                self._slew_destination = None
+            return 0.0
 
-        if self._remaining_action_steps <= 0 or self._battery_level >= BATTERY_MAX:
-            self._attitude = "sun"
-            self._busy_status = "idle"
-            self._remaining_action_steps = 0
-            self._current_action_type = None
-            self._slew_destination = None
-            self._slew_steps_left = 0
+        # Charging phase: one tick per action call; satellite stays idle so it can
+        # choose any next action (including issuing sun_point_for_charging again).
+        if not self._sunlit_status:
+            self._drain_battery(WAIT_BATTERY_COST)
+            return -0.2
 
-        return reward
+        self._attitude = "sun"
+        old_battery = self._battery_level
+        self._battery_level = min(
+            self._battery_level + SUN_CHARGE_PER_STEP, BATTERY_MAX
+        )
+        gained = self._battery_level - old_battery
+        self._total_battery_gained += gained
+        return 0.1
