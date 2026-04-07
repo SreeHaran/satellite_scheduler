@@ -15,6 +15,109 @@ tags:
 
 An RL environment simulating a low-Earth-orbit (LEO) satellite that must schedule imaging tasks, manage battery via sun-pointing, compress captured data, and downlink results during ground-station visibility windows — all within a 90-minute orbital episode.
 
+## Problem Statement
+
+Real LEO Earth-observation satellites face a hard resource-scheduling problem: they must serve a continuously arriving stream of ground imaging requests while simultaneously managing three scarce, time-coupled resources — **battery**, **onboard storage**, and **ground-station contact time**.
+
+The constraints interact in non-trivial ways:
+
+- **Charging only works in sunlight.** Every orbit has fixed eclipse periods where the solar panels produce nothing, yet every action drains the battery.
+- **Storage is finite.** Raw captured images consume 5–15 GB each. If storage fills up, no new images can be taken and the mission stalls.
+- **Downlink windows are short and infrequent.** Ground stations are only visible for brief windows (~10 minutes per pass). Data must be *compressed* before it can be downlinked, so the pipeline `capture → compress → downlink` must be choreographed across multiple orbital windows.
+- **Requests have deadlines and priorities.** Imaging opportunities expire if the satellite does not act in time. High-priority targets (e.g., disaster monitoring) carry more value than routine surveys.
+
+An onboard scheduler today is typically a hand-crafted rule engine. This environment frames the problem as a **sequential decision-making task** so a reinforcement-learning agent can learn a policy that maximises mission value end-to-end, including trade-offs that are hard to enumerate manually (e.g., "should I charge now or rush to capture this high-priority target before its deadline?").
+
+## How the RL Agent Solves It
+
+At each 30-second step the agent receives a full observation of the satellite's state and picks one of six discrete actions. Multi-step actions (capture, compress, downlink, charge) run over several consecutive steps — the agent only needs to *start* them; the environment continues them automatically until the agent sends `abort_task` or the action naturally completes.
+
+The agent must learn to:
+
+1. **Prioritise requests** — prefer high-priority captures and respect deadlines.
+2. **Pipeline data** — never let raw data sit idle when storage is tight; compress promptly.
+3. **Time the downlink** — buffer compressed data and flush it during every GS pass.
+4. **Manage energy** — charge proactively during sunlit windows before battery drops critical.
+5. **Recover from mistakes** — use `abort_task` when a better opportunity appears mid-action.
+
+## Agent Tasks
+
+| Task | What the agent must do |
+|---|---|
+| **Capture** | Slew to a pending target and image it before its deadline; choose which request to serve first based on priority and time-to-deadline. |
+| **Compress** | After capture, compress raw data to free storage and prepare data for downlink. Must be done before the next GS pass to maximise throughput. |
+| **Downlink** | Transmit all compressed data to the ground station during the visibility window. Windows are ~10 minutes long; missing one wastes the whole capture pipeline. |
+| **Charge** | Point at the sun during sunlit windows to replenish the battery. Must prevent the battery from hitting 0 (episode-terminating failure). |
+| **Schedule** | Decide at every step whether to capture, compress, downlink, charge, or wait — balancing all four tasks simultaneously in the face of strict time and resource constraints. |
+
+## Graders
+
+Performance is evaluated by three graders of increasing difficulty. All graders read `episode_stats` returned by `GET /state` at the end of an episode and return a score in **[0, 1]** (higher is better).
+
+---
+
+### Grader 1 — Easy: Priority-Aware Mission Completion
+
+> *Did the agent capture the most valuable targets?*
+
+```
+score = Σ priority_weight(completed requests)
+        ─────────────────────────────────────
+        Σ priority_weight(all requests)
+```
+
+| Priority | Weight |
+|---|---|
+| low | 1.0 |
+| medium | 2.0 |
+| high | 3.0 |
+
+A request counts as "completed" once its status reaches `captured`, `compressed`, or `downlinked`. This grader ignores whether data was actually sent to the ground — it rewards the agent purely for acquiring the right images.
+
+**Perfect score:** capture every request, highest-priority ones first.
+
+---
+
+### Grader 2 — Medium: Storage-Flow Efficiency
+
+> *Did the agent keep data moving through the pipeline without clogging storage?*
+
+```
+score = 0.50 × (data_downlinked  / data_compressed)   ← downlink throughput
+      + 0.30 × (data_compressed  / data_generated)    ← compression rate
+      + 0.20 × (1 − avg_storage_utilisation)          ← storage headroom
+      − 0.15 × stalled_raw_data_fraction              ← idle raw data penalty
+      − 0.10 × storage_full_steps_fraction            ← high-storage penalty
+```
+
+This grader penalises the agent for capturing data it cannot process or transmit. An agent that fills storage and then does nothing loses points even if it captured many requests.
+
+**Perfect score:** compress all raw data immediately and downlink every byte during GS passes.
+
+---
+
+### Grader 3 — Hard: Closed-Loop Mission Planning
+
+> *Did the agent manage all subsystems end-to-end without failures?*
+
+```
+score = 0.50 × priority_weighted_completion_ratio
+      + 0.30 × (data_downlinked / data_generated)     ← end-to-end pipeline
+      + 0.10 × charging_efficiency                    ← used sunlit windows well
+      + 0.10 × storage_efficiency                     ← avoided overflow events
+      − 0.15 × missed_deadlines_fraction              ← requests that expired
+      − 0.20 × battery_low_fraction                   ← steps below 10 % battery
+      − 0.20 × storage_high_fraction                  ← steps above 85 GB storage
+```
+
+Where:
+- **charging_efficiency** = `min(1, total_battery_gained / (sunlit_steps × 10))` — did the agent use every available solar window?
+- **storage_efficiency** = `1 − (overflow_events + high_storage_steps) / total_steps` — did storage stay safely below capacity?
+
+This grader can return slightly negative scores for catastrophically managed episodes (battery death, perpetual storage overflow). It is the definitive measure of an agent that has mastered all four sub-tasks simultaneously.
+
+**Perfect score:** capture all high-priority requests before deadlines, keep the pipeline flowing, never let battery drop below 10 %, and downlink everything.
+
 ## Quick Start
 
 ```python
@@ -44,7 +147,7 @@ with SatelliteSchedulerEnv(base_url="http://localhost:8000").sync() as env:
 
 | Parameter | Value |
 |---|---|
-| Episode length | 90 minutes (5 400 s) |
+| Episode length | 90 minutes (5400 s) |
 | Step duration | 30 seconds |
 | Steps per episode | 180 (50 in inference.py to adhere hackathon requirements) |
 | Initial battery | 90 / 100 |
