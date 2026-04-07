@@ -35,13 +35,6 @@ from models import SatelliteSchedulerAction, ActionType
 from client import SatelliteSchedulerEnv
 from grader import grade_all
 
-# from satellite_scheduler import (
-#     SatelliteSchedulerEnv,
-#     SatelliteSchedulerAction,
-#     ActionType,
-#     grade_all,
-# )
-
 IMAGE_NAME = os.getenv("IMAGE_NAME")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 
@@ -54,9 +47,6 @@ MAX_STEPS = 50  # Reduced to meet hackathon requirements of execution within 20 
 TEMPERATURE = 0.7
 MAX_TOKENS = 200
 SUCCESS_SCORE_THRESHOLD = 0.5
-
-# Use final episode grade as score
-MAX_TOTAL_REWARD = 1.0
 
 
 SYSTEM_PROMPT = textwrap.dedent(
@@ -129,7 +119,7 @@ def parse_action_from_text(text: str) -> Optional[SatelliteSchedulerAction]:
             return SatelliteSchedulerAction(action_type=action_type)
 
     # Default to wait if unclear
-    return SatelliteSchedulerAction(action_type=ActionType.wait)
+    return SatelliteSchedulerAction(action_type=ActionType.WAIT)
 
 
 def log_start(task: str, env: str, model: str):

@@ -41,8 +41,6 @@ class SatelliteSchedulerEnv(
         payload: Dict = {"action_type": action.action_type.value}
         if action.target_id is not None:
             payload["target_id"] = action.target_id
-        if action.destination is not None:
-            payload["destination"] = action.destination
         return payload
 
     def _parse_result(self, payload: Dict) -> StepResult[SatelliteSchedulerObservation]:
