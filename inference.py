@@ -36,7 +36,7 @@ from models import SatelliteSchedulerAction, ActionType, TargetRequest
 from client import SatelliteSchedulerEnv
 from grader import grade_all
 
-IMAGE_NAME = os.getenv("IMAGE_NAME")
+IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "openenv-satellite_scheduler:latest")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
