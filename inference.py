@@ -27,11 +27,12 @@ STDOUT FORMAT
 
 import asyncio
 import os
+import re
 import textwrap
 from typing import List, Optional
 
 from openai import OpenAI
-from models import SatelliteSchedulerAction, ActionType
+from models import SatelliteSchedulerAction, ActionType, TargetRequest
 from client import SatelliteSchedulerEnv
 from grader import grade_all
 
@@ -63,7 +64,11 @@ SYSTEM_PROMPT = textwrap.dedent(
     - Downlink when ground station is visible (gs_visible=true)
     - Monitor battery and storage levels to avoid failure
     
-    Respond with a single action name and optional parameters.
+    Respond with a single action name and optional parameters. Note that optional parameters (like target_id) should only be included for the capture_image action.
+    The target id for the capture_image action should be selected from the pending request queue, prioritizing higher priority targets.
+    Output format:
+    - For actions without parameters: "wait", "abort_task", "sun_point_for_charging", "compress_data", "downlink_to_station"
+    - For capture_image action: "capture_image <target-id>". Example: "capture_image 42"
     """
 ).strip()
 
@@ -75,20 +80,29 @@ def build_user_prompt(
     storage_util: float,
     is_sunlit: bool,
     gs_visible: bool,
-    pending_requests: int,
+    pending_request_queue: List[TargetRequest],
     last_reward: float,
     history: List[str],
 ) -> str:
     sunlit_str = "SUNLIT" if is_sunlit else "DARK"
     gs_str = "VISIBLE" if gs_visible else "NOT VISIBLE"
 
+    if pending_request_queue:
+        queue_lines = "\n".join(
+            f"  - id={r.request_id} priority={r.priority.value} mode={r.imaging_mode.value} deadline={r.deadline}s"
+            for r in pending_request_queue
+        )
+        queue_str = f"{len(pending_request_queue)} pending:\n{queue_lines}"
+    else:
+        queue_str = "none"
+
     return textwrap.dedent(
         f"""
         MISSION STATUS
         ==============
-        Step: {step}/180 (Time: {current_time:.0f}s)
+        Step: {step}/{MAX_STEPS} (Time: {current_time:.0f}s)
         Battery: {battery:.1f}% | Storage: {storage_util:.0f}% | Sunlit: {sunlit_str} | GS: {gs_str}
-        Pending requests: {pending_requests} | Last reward: {last_reward:.3f}
+        Requests: {queue_str} | Last reward: {last_reward:.3f}
         
         Recent actions:
         {chr(10).join(history[-3:]) if history else "(none)"}
@@ -102,7 +116,14 @@ def parse_action_from_text(text: str) -> Optional[SatelliteSchedulerAction]:
     """Parse LLM response into a SatelliteSchedulerAction."""
     text_lower = text.lower().strip()
 
-    # Map common patterns to actions
+    # Handle capture_image first: extract target_id from response (e.g. "capture_image 42")
+    if "capture" in text_lower or "image" in text_lower:
+        match = re.search(r"\d+", text)
+        target_id = int(match.group()) if match else None
+        return SatelliteSchedulerAction(
+            action_type=ActionType.CAPTURE_IMAGE, target_id=target_id
+        )
+
     action_mappings = {
         "wait": ActionType.WAIT,
         "abort": ActionType.ABORT_TASK,
@@ -110,8 +131,6 @@ def parse_action_from_text(text: str) -> Optional[SatelliteSchedulerAction]:
         "charge": ActionType.SUN_POINT_FOR_CHARGING,
         "compress": ActionType.COMPRESS_DATA,
         "downlink": ActionType.DOWNLINK_TO_STATION,
-        "capture": ActionType.CAPTURE_IMAGE,
-        "image": ActionType.CAPTURE_IMAGE,
     }
 
     for keyword, action_type in action_mappings.items():
@@ -150,7 +169,7 @@ def get_model_decision(
     storage_util: float,
     is_sunlit: bool,
     gs_visible: bool,
-    pending_requests: int,
+    pending_request_queue: List[TargetRequest],
     last_reward: float,
     history: List[str],
 ) -> str:
@@ -161,7 +180,7 @@ def get_model_decision(
         storage_util,
         is_sunlit,
         gs_visible,
-        pending_requests,
+        pending_request_queue,
         last_reward,
         history,
     )
@@ -213,7 +232,7 @@ async def main() -> None:
                 obs.storage_used,
                 obs.sunlit_status,
                 obs.ground_station_visible,
-                len(obs.pending_request_queue),
+                obs.pending_request_queue,
                 last_reward,
                 history,
             )
