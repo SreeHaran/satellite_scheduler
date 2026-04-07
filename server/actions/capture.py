@@ -120,7 +120,7 @@ class CaptureMixin:
             self._current_action_type = None
             self._slew_steps_left = 0
 
-            return 0.3 * (
+            return 0.5 * (
                 PRIORITY_WEIGHT.get(req.priority.value, 1.0) / 3.0 if req else 0.0
             )
 

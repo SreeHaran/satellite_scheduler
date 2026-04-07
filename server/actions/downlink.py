@@ -92,7 +92,7 @@ class DownlinkMixin:
         self._total_data_downlinked += data_sent
         self._remaining_action_steps -= 1
 
-        reward = 0.5 * (data_sent / DOWNLINK_STEP_DATA_GB)  # normalized per-step
+        reward = 0.7 * (data_sent / DOWNLINK_STEP_DATA_GB)  # normalized per-step
 
         if self._remaining_action_steps <= 0 or self._compressed_data_amount <= 0:
             self._busy_status = "idle"
