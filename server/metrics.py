@@ -1,9 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
 """Per-step metrics collection mixin for the Satellite Scheduler Environment.
 
 Accumulates statistics used by the graders.  Intended to be mixed into
