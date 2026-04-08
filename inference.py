@@ -29,12 +29,32 @@ import asyncio
 import os
 import re
 import textwrap
+import traceback
 from typing import List, Optional
 
-from openai import OpenAI
-from models import SatelliteSchedulerAction, ActionType, TargetRequest
-from client import SatelliteSchedulerEnv
-from grader import grade_all
+try:
+    from openai import OpenAI
+except ImportError as e:
+    print(f"[DEBUG] Failed to import openai: {e}", flush=True)
+    raise
+
+try:
+    from models import SatelliteSchedulerAction, ActionType, TargetRequest
+except ImportError as e:
+    print(f"[DEBUG] Failed to import models: {e}", flush=True)
+    raise
+
+try:
+    from client import SatelliteSchedulerEnv
+except ImportError as e:
+    print(f"[DEBUG] Failed to import client: {e}", flush=True)
+    raise
+
+try:
+    from grader import grade_all
+except ImportError as e:
+    print(f"[DEBUG] Failed to import grader: {e}", flush=True)
+    raise
 
 IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "openenv-satellite_scheduler:latest")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
@@ -87,14 +107,21 @@ def build_user_prompt(
     sunlit_str = "SUNLIT" if is_sunlit else "DARK"
     gs_str = "VISIBLE" if gs_visible else "NOT VISIBLE"
 
-    if pending_request_queue:
-        queue_lines = "\n".join(
-            f"  - id={r.request_id} priority={r.priority.value} mode={r.imaging_mode.value} deadline={r.deadline}s"
-            for r in pending_request_queue
+    try:
+        if pending_request_queue:
+            queue_lines = "\n".join(
+                f"  - id={r.request_id} priority={r.priority.value} mode={r.imaging_mode.value} deadline={r.deadline}s"
+                for r in pending_request_queue
+            )
+            queue_str = f"{len(pending_request_queue)} pending:\n{queue_lines}"
+        else:
+            queue_str = "none"
+    except Exception as e:
+        print(
+            f"[DEBUG] build_user_prompt: error building queue string: {e}\n{traceback.format_exc()}",
+            flush=True,
         )
-        queue_str = f"{len(pending_request_queue)} pending:\n{queue_lines}"
-    else:
-        queue_str = "none"
+        queue_str = "(error reading queue)"
 
     return textwrap.dedent(
         f"""
@@ -114,31 +141,38 @@ def build_user_prompt(
 
 def parse_action_from_text(text: str) -> Optional[SatelliteSchedulerAction]:
     """Parse LLM response into a SatelliteSchedulerAction."""
-    text_lower = text.lower().strip()
+    try:
+        text_lower = text.lower().strip()
 
-    # Handle capture_image first: extract target_id from response (e.g. "capture_image 42")
-    if "capture" in text_lower or "image" in text_lower:
-        match = re.search(r"\d+", text)
-        target_id = int(match.group()) if match else None
-        return SatelliteSchedulerAction(
-            action_type=ActionType.CAPTURE_IMAGE, target_id=target_id
+        # Handle capture_image first: extract target_id from response (e.g. "capture_image 42")
+        if "capture" in text_lower or "image" in text_lower:
+            match = re.search(r"\d+", text)
+            target_id = int(match.group()) if match else None
+            return SatelliteSchedulerAction(
+                action_type=ActionType.CAPTURE_IMAGE, target_id=target_id
+            )
+
+        action_mappings = {
+            "wait": ActionType.WAIT,
+            "abort": ActionType.ABORT_TASK,
+            "sun_point": ActionType.SUN_POINT_FOR_CHARGING,
+            "charge": ActionType.SUN_POINT_FOR_CHARGING,
+            "compress": ActionType.COMPRESS_DATA,
+            "downlink": ActionType.DOWNLINK_TO_STATION,
+        }
+
+        for keyword, action_type in action_mappings.items():
+            if keyword in text_lower:
+                return SatelliteSchedulerAction(action_type=action_type)
+
+        # Default to wait if unclear
+        return SatelliteSchedulerAction(action_type=ActionType.WAIT)
+    except Exception as e:
+        print(
+            f"[DEBUG] parse_action_from_text failed: {e}\n{traceback.format_exc()}",
+            flush=True,
         )
-
-    action_mappings = {
-        "wait": ActionType.WAIT,
-        "abort": ActionType.ABORT_TASK,
-        "sun_point": ActionType.SUN_POINT_FOR_CHARGING,
-        "charge": ActionType.SUN_POINT_FOR_CHARGING,
-        "compress": ActionType.COMPRESS_DATA,
-        "downlink": ActionType.DOWNLINK_TO_STATION,
-    }
-
-    for keyword, action_type in action_mappings.items():
-        if keyword in text_lower:
-            return SatelliteSchedulerAction(action_type=action_type)
-
-    # Default to wait if unclear
-    return SatelliteSchedulerAction(action_type=ActionType.WAIT)
+        return SatelliteSchedulerAction(action_type=ActionType.WAIT)
 
 
 def log_start(task: str, env: str, model: str):
@@ -173,17 +207,25 @@ def get_model_decision(
     last_reward: float,
     history: List[str],
 ) -> str:
-    user_prompt = build_user_prompt(
-        step,
-        current_time,
-        battery,
-        storage_util,
-        is_sunlit,
-        gs_visible,
-        pending_request_queue,
-        last_reward,
-        history,
-    )
+    try:
+        user_prompt = build_user_prompt(
+            step,
+            current_time,
+            battery,
+            storage_util,
+            is_sunlit,
+            gs_visible,
+            pending_request_queue,
+            last_reward,
+            history,
+        )
+    except Exception as e:
+        print(
+            f"[DEBUG] get_model_decision: build_user_prompt failed at step={step}: {e}\n{traceback.format_exc()}",
+            flush=True,
+        )
+        return "wait"
+
     try:
         completion = client.chat.completions.create(
             model=MODEL_NAME,
@@ -198,14 +240,31 @@ def get_model_decision(
         text = (completion.choices[0].message.content or "").strip()
         return text if text else "wait"
     except Exception as exc:
-        # print(f"[DEBUG] Model request failed: {exc}", flush=True)
+        print(
+            f"[DEBUG] Model request failed at step={step}: {exc}\n{traceback.format_exc()}",
+            flush=True,
+        )
         return "wait"
 
 
 async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    try:
+        client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    except Exception as e:
+        print(
+            f"[DEBUG] Failed to create OpenAI client: {e}\n{traceback.format_exc()}",
+            flush=True,
+        )
+        raise
 
-    env = await SatelliteSchedulerEnv.from_docker_image(IMAGE_NAME)
+    try:
+        env = await SatelliteSchedulerEnv.from_docker_image(IMAGE_NAME)
+    except Exception as e:
+        print(
+            f"[DEBUG] from_docker_image failed (image={IMAGE_NAME}): {e}\n{traceback.format_exc()}",
+            flush=True,
+        )
+        raise
 
     history: List[str] = []
     rewards: List[float] = []
@@ -216,14 +275,29 @@ async def main() -> None:
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        result = await env.reset()
+        try:
+            result = await env.reset()
+        except Exception as e:
+            print(
+                f"[DEBUG] env.reset() failed: {e}\n{traceback.format_exc()}", flush=True
+            )
+            raise
+
         last_reward = 0.0
 
         for step in range(1, MAX_STEPS + 1):
             if result.done:
                 break
 
-            obs = result.observation
+            try:
+                obs = result.observation
+            except Exception as e:
+                print(
+                    f"[DEBUG] Failed to read observation at step={step}: {e}\n{traceback.format_exc()}",
+                    flush=True,
+                )
+                raise
+
             decision = get_model_decision(
                 client,
                 step,
@@ -238,12 +312,27 @@ async def main() -> None:
             )
 
             action = parse_action_from_text(decision)
-            result = await env.step(action)
-            obs = result.observation
 
-            reward = result.reward or 0.0
-            done = result.done
-            error = None
+            try:
+                result = await env.step(action)
+            except Exception as e:
+                print(
+                    f"[DEBUG] env.step() failed at step={step} action={action.action_type.name}: {e}\n{traceback.format_exc()}",
+                    flush=True,
+                )
+                raise
+
+            try:
+                obs = result.observation
+                reward = result.reward or 0.0
+                done = result.done
+                error = None
+            except Exception as e:
+                print(
+                    f"[DEBUG] Failed to unpack step result at step={step}: {e}\n{traceback.format_exc()}",
+                    flush=True,
+                )
+                raise
 
             rewards.append(reward)
             steps_taken = step
@@ -272,24 +361,41 @@ async def main() -> None:
                 grades = grade_all(episode_stats)
                 score = (grades["easy"] + grades["medium"] + grades["hard"]) / 3.0
                 success = score >= SUCCESS_SCORE_THRESHOLD
-                # print(
-                #     f"[DEBUG] Episode grades - Easy: {grades['easy']:.3f}, Medium: {grades['medium']:.3f}, Hard: {grades['hard']:.3f}",
-                #     flush=True,
-                # )
+                print(
+                    f"[DEBUG] Episode grades - Easy: {grades['easy']:.3f}, Medium: {grades['medium']:.3f}, Hard: {grades['hard']:.3f}",
+                    flush=True,
+                )
             except Exception as e:
-                # print(f"[DEBUG] Could not compute grades: {e}", flush=True)
+                print(
+                    f"[DEBUG] Could not compute grades: {e}\n{traceback.format_exc()}",
+                    flush=True,
+                )
                 score = sum(rewards) / len(rewards) if rewards else 0.0
                 success = score >= SUCCESS_SCORE_THRESHOLD
 
+    except Exception as e:
+        print(
+            f"[DEBUG] main: unhandled exception in episode loop: {e}\n{traceback.format_exc()}",
+            flush=True,
+        )
+        raise
     finally:
         try:
             await env.close()
         except Exception as e:
-            # print(f"[DEBUG] env.close() error (container cleanup): {e}", flush=True)
-            pass
+            print(
+                f"[DEBUG] env.close() error (container cleanup): {e}\n{traceback.format_exc()}",
+                flush=True,
+            )
 
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(
+            f"[DEBUG] main: unhandled exception: {e}\n{traceback.format_exc()}",
+            flush=True,
+        )
