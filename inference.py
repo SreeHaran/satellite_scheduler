@@ -353,9 +353,9 @@ async def main() -> None:
         raise Exception(f"Unhandled exception in episode loop: {e}")
     finally:
         try:
-            await asyncio.wait_for(env.close(), timeout=30)
-        except asyncio.TimeoutError:
-            # Graceful stop timed out, attempt force kill via docker
+            await env.close()
+        except Exception as e:
+            # Docker stop timed out, attempt force kill
             try:
                 if hasattr(env, "_container_id"):
                     subprocess.run(
@@ -363,14 +363,12 @@ async def main() -> None:
                         timeout=5,
                         capture_output=True,
                     )
-            except Exception:
-                pass
-        except Exception as e:
-            raise Exception(f"env.close() failed (container cleanup): {e}")
+            except Exception as e:
+                raise Exception(f"env.close() failed (container cleanup): {e}")
 
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
 if __name__ == "__main__":
-    sys.tracebacklimit = 0
+    sys.tracebacklimit = 1
     asyncio.run(main())
