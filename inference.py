@@ -276,9 +276,6 @@ async def main() -> None:
                 done = result.done
                 error = None
 
-                # Map reward from [-1, 1] to [0.01, 0.99] for hackathon scoring.
-                reward = 0.01 + ((max(-1.0, min(1.0, reward)) + 1.0) / 2.0) * 0.98
-
                 rewards.append(reward)
                 steps_taken = step
                 last_reward = reward
