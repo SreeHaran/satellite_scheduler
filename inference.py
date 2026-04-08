@@ -36,7 +36,11 @@ from typing import List, Optional
 
 from openai import OpenAI
 
-from models import SatelliteSchedulerAction, ActionType, TargetRequest
+from models import (
+    SatelliteSchedulerAction,
+    ActionType,
+    SatelliteSchedulerObservation,
+)
 from client import SatelliteSchedulerEnv
 from grader import grade_all
 
@@ -88,17 +92,26 @@ SYSTEM_PROMPT = textwrap.dedent(
 
 def build_user_prompt(
     step: int,
-    current_time: float,
-    battery: float,
-    storage_util: float,
-    is_sunlit: bool,
-    gs_visible: bool,
-    pending_request_queue: List[TargetRequest],
+    obs: SatelliteSchedulerObservation,
     last_reward: float,
     history: List[str],
 ) -> str:
-    sunlit_str = "SUNLIT" if is_sunlit else "DARK"
-    gs_str = "VISIBLE" if gs_visible else "NOT VISIBLE"
+    # Extract all state attributes from observation
+    current_time = obs.current_time
+    attitude = obs.attitude
+    busy_status = obs.busy_status
+    remaining_action_steps = obs.remaining_action_steps
+    battery_level = obs.battery_level
+    storage_used = obs.storage_used
+    raw_data_amount = obs.raw_data_amount
+    compressed_data_amount = obs.compressed_data_amount
+    sunlit_status = obs.sunlit_status
+    ground_station_visible = obs.ground_station_visible
+    pending_request_queue = obs.pending_request_queue
+    current_selected_request_id = obs.current_selected_request_id
+
+    sunlit_str = "SUNLIT" if sunlit_status else "DARK"
+    gs_str = "VISIBLE" if ground_station_visible else "NOT VISIBLE"
 
     try:
         if pending_request_queue:
@@ -114,13 +127,29 @@ def build_user_prompt(
 
     return textwrap.dedent(
         f"""
-        MISSION STATUS
-        ==============
-        Step: {step}/{MAX_STEPS} (Time: {current_time:.0f}s)
-        Battery: {battery:.1f}% | Storage: {storage_util:.0f}% | Sunlit: {sunlit_str} | GS: {gs_str}
-        Requests: {queue_str} | Last reward: {last_reward:.3f}
+        SATELLITE STATE
+        ===============
+        Step: {step}/{MAX_STEPS}
         
-        Recent actions:
+        ORBITAL STATE
+        Time: {current_time}s | Attitude: {attitude} | Busy Status: {busy_status}
+        Remaining Action Steps: {remaining_action_steps}
+        
+        RESOURCE LEVELS
+        Battery: {battery_level:.1f}% | Storage Used: {storage_used:.1f} GB
+        Raw Data: {raw_data_amount:.1f} GB | Compressed Data: {compressed_data_amount:.1f} GB
+        
+        VISIBILITY
+        Sunlit: {sunlit_str} | Ground Station: {gs_str}
+        
+        MISSION REQUESTS
+        {queue_str}
+        Currently Selected Request: {current_selected_request_id if current_selected_request_id else "None"}
+        
+        PERFORMANCE
+        Last Reward: {last_reward:.3f}
+        
+        RECENT ACTIONS
         {chr(10).join(history[-3:]) if history else "(none)"}
         
         What action should the satellite take next?
@@ -183,24 +212,14 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]):
 def get_model_decision(
     client: OpenAI,
     step: int,
-    current_time: float,
-    battery: float,
-    storage_util: float,
-    is_sunlit: bool,
-    gs_visible: bool,
-    pending_request_queue: List[TargetRequest],
+    obs: SatelliteSchedulerObservation,
     last_reward: float,
     history: List[str],
 ) -> str:
     try:
         user_prompt = build_user_prompt(
             step,
-            current_time,
-            battery,
-            storage_util,
-            is_sunlit,
-            gs_visible,
-            pending_request_queue,
+            obs,
             last_reward,
             history,
         )
@@ -257,12 +276,7 @@ async def main() -> None:
                 decision = get_model_decision(
                     client,
                     step,
-                    obs.current_time,
-                    obs.battery_level,
-                    obs.storage_used,
-                    obs.sunlit_status,
-                    obs.ground_station_visible,
-                    obs.pending_request_queue,
+                    obs,
                     last_reward,
                     history,
                 )
