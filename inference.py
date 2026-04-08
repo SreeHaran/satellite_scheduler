@@ -28,6 +28,7 @@ STDOUT FORMAT
 import asyncio
 import os
 import re
+import subprocess
 import sys
 import textwrap
 import traceback
@@ -352,7 +353,18 @@ async def main() -> None:
         raise Exception(f"Unhandled exception in episode loop: {e}")
     finally:
         try:
-            await env.close()
+            await asyncio.wait_for(env.close(), timeout=30)
+        except asyncio.TimeoutError:
+            # Graceful stop timed out, attempt force kill via docker
+            try:
+                if hasattr(env, "_container_id"):
+                    subprocess.run(
+                        ["docker", "kill", env._container_id],
+                        timeout=5,
+                        capture_output=True,
+                    )
+            except Exception:
+                pass
         except Exception as e:
             raise Exception(f"env.close() failed (container cleanup): {e}")
 
