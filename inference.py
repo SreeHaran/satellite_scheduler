@@ -37,25 +37,21 @@ from typing import List, Optional
 try:
     from openai import OpenAI
 except ImportError as e:
-    # print(f"[DEBUG] Failed to import openai: {e}", flush=True)
     raise
 
 try:
     from models import SatelliteSchedulerAction, ActionType, TargetRequest
 except ImportError as e:
-    # print(f"[DEBUG] Failed to import models: {e}", flush=True)
     raise
 
 try:
     from client import SatelliteSchedulerEnv
 except ImportError as e:
-    # print(f"[DEBUG] Failed to import client: {e}", flush=True)
     raise
 
 try:
     from grader import grade_all
 except ImportError as e:
-    # print(f"[DEBUG] Failed to import grader: {e}", flush=True)
     raise
 
 IMAGE_NAME = os.getenv("IMAGE_NAME", "openenv-satellite_scheduler:latest")
@@ -119,10 +115,6 @@ def build_user_prompt(
         else:
             queue_str = "none"
     except Exception as e:
-        # print(
-        #     f"[DEBUG] build_user_prompt: error building queue string: {e}",
-        #     flush=True,
-        # )
         queue_str = "(error reading queue)"
 
     return textwrap.dedent(
@@ -170,10 +162,6 @@ def parse_action_from_text(text: str) -> Optional[SatelliteSchedulerAction]:
         # Default to wait if unclear
         return SatelliteSchedulerAction(action_type=ActionType.WAIT)
     except Exception as e:
-        # print(
-        #     f"[DEBUG] parse_action_from_text failed: {e}",
-        #     flush=True,
-        # )
         return SatelliteSchedulerAction(action_type=ActionType.WAIT)
 
 
@@ -192,7 +180,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 def log_end(success: bool, steps: int, score: float, rewards: List[float]):
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} score={score} rewards={rewards_str}",
         flush=True,
     )
 
@@ -222,10 +210,6 @@ def get_model_decision(
             history,
         )
     except Exception as e:
-        # print(
-        #     f"[DEBUG] get_model_decision: build_user_prompt failed at step={step}: {e}",
-        #     flush=True,
-        # )
         return "wait"
 
     try:
@@ -241,11 +225,7 @@ def get_model_decision(
         )
         text = (completion.choices[0].message.content or "").strip()
         return text if text else "wait"
-    except Exception as exc:
-        # print(
-        #     f"[DEBUG] Model request failed at step={step}: {exc}",
-        #     flush=True,
-        # )
+    except Exception as e:
         return "wait"
 
 
@@ -274,7 +254,7 @@ async def main() -> None:
         except Exception as e:
             raise Exception(f"env.reset() failed: {e}")
 
-        last_reward = 0.0
+        last_reward = 0.01
 
         for step in range(1, MAX_STEPS + 1):
             if result.done:
@@ -315,6 +295,9 @@ async def main() -> None:
             except Exception as e:
                 raise Exception(f"Failed to unpack step result at step={step}: {e}")
 
+            # reward between 0.1 to 0.99 for hackathon
+            reward = 0.01 + ((max(-1.0, min(1.0, reward)) + 1.0) / 2.0) * 0.98
+
             rewards.append(reward)
             steps_taken = step
             last_reward = reward
@@ -342,10 +325,6 @@ async def main() -> None:
                 grades = grade_all(episode_stats)
                 score = (grades["easy"] + grades["medium"] + grades["hard"]) / 3.0
                 success = score >= SUCCESS_SCORE_THRESHOLD
-                # print(
-                #     f"[DEBUG] Episode grades - Easy: {grades['easy']:.3f}, Medium: {grades['medium']:.3f}, Hard: {grades['hard']:.3f}",
-                #     flush=True,
-                # )
             except Exception as e:
                 raise Exception(f"Could not compute grades: {e}")
 
