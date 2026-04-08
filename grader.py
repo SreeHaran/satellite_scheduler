@@ -19,7 +19,7 @@ _COMPLETED_STATUSES = {"captured", "compressed", "downlinked"}
 
 
 def _clamp(value: float) -> float:
-    return max(0.0, min(1.0, value))
+    return max(0.0001, min(0.9999, value))
 
 
 def _safe_div(numerator: float, denominator: float, default: float = 0.0) -> float:
