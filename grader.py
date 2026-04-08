@@ -54,7 +54,7 @@ def grade_easy(episode_stats: Dict[str, Any]) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Grader 3 – Medium: Storage-flow efficiency
+# Grader 2 – Medium: Storage-flow efficiency
 # ---------------------------------------------------------------------------
 
 
@@ -91,7 +91,7 @@ def grade_medium(episode_stats: Dict[str, Any]) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Grader 2 – Hard: Closed-loop mission planning
+# Grader 3 – Hard: Closed-loop mission planning
 # ---------------------------------------------------------------------------
 
 

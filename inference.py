@@ -34,32 +34,27 @@ import textwrap
 import traceback
 from typing import List, Optional
 
-try:
-    from openai import OpenAI
-except ImportError as e:
-    raise
+from openai import OpenAI
 
-try:
-    from models import SatelliteSchedulerAction, ActionType, TargetRequest
-except ImportError as e:
-    raise
+from models import SatelliteSchedulerAction, ActionType, TargetRequest
+from client import SatelliteSchedulerEnv
+from grader import grade_all
 
-try:
-    from client import SatelliteSchedulerEnv
-except ImportError as e:
-    raise
-
-try:
-    from grader import grade_all
-except ImportError as e:
-    raise
 
 IMAGE_NAME = os.getenv("IMAGE_NAME", "openenv-satellite_scheduler:latest")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+
 TASK_NAME = os.getenv("SATELLITE_SCHEDULER_TASK", "satellite_mission_planning")
+
+TASK_EASY = os.getenv(
+    "SATELLITE_SCHEDULER_TASK_EASY", "priority_aware_mission_planning"
+)
+TASK_MEDIUM = os.getenv("SATELLITE_SCHEDULER_TASK_MEDIUM", "storage_flow_efficiency")
+TASK_HARD = os.getenv("SATELLITE_SCHEDULER_TASK_HARD", "closed_loop_mission_planning")
+
 BENCHMARK = os.getenv("SATELLITE_SCHEDULER_BENCHMARK", "satellite_scheduler")
 
 MAX_STEPS = 50  # Reduced to meet hackathon requirements of execution within 20 minutes(in vcpu=2, memory=8gb), Its best to run with 180 steps
@@ -230,122 +225,104 @@ def get_model_decision(
 
 
 async def main() -> None:
-    try:
-        client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-    except Exception as e:
-        raise Exception(f"Failed to create OpenAI client: {e}")
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    task_configs = [
+        (TASK_EASY, "easy"),
+        (TASK_MEDIUM, "medium"),
+        (TASK_HARD, "hard"),
+    ]
 
-    try:
+    for task_name, grade_key in task_configs:
         env = await SatelliteSchedulerEnv.from_docker_image(IMAGE_NAME)
-    except Exception as e:
-        raise Exception(f"from_docker_image failed (image={IMAGE_NAME}): {e}")
 
-    history: List[str] = []
-    rewards: List[float] = []
-    steps_taken = 0
-    score = 0.0
-    success = False
+        history: List[str] = []
+        rewards: List[float] = []
+        steps_taken = 0
+        score = 0.0
+        success = False
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+        log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
-    try:
         try:
             result = await env.reset()
-        except Exception as e:
-            raise Exception(f"env.reset() failed: {e}")
 
-        last_reward = 0.01
+            last_reward = 0.01
 
-        for step in range(1, MAX_STEPS + 1):
-            if result.done:
-                break
+            for step in range(1, MAX_STEPS + 1):
+                if result.done:
+                    break
 
-            try:
                 obs = result.observation
-            except Exception as e:
-                raise Exception(f"Failed to read observation at step={step}: {e}")
 
-            decision = get_model_decision(
-                client,
-                step,
-                obs.current_time,
-                obs.battery_level,
-                obs.storage_used,
-                obs.sunlit_status,
-                obs.ground_station_visible,
-                obs.pending_request_queue,
-                last_reward,
-                history,
-            )
-
-            action = parse_action_from_text(decision)
-
-            try:
-                result = await env.step(action)
-            except Exception as e:
-                raise Exception(
-                    f"env.step() failed at step={step} action={action.action_type.name}: {e}"
+                decision = get_model_decision(
+                    client,
+                    step,
+                    obs.current_time,
+                    obs.battery_level,
+                    obs.storage_used,
+                    obs.sunlit_status,
+                    obs.ground_station_visible,
+                    obs.pending_request_queue,
+                    last_reward,
+                    history,
                 )
 
-            try:
+                action = parse_action_from_text(decision)
+
+                result = await env.step(action)
+
                 obs = result.observation
                 reward = result.reward or 0.0
                 done = result.done
                 error = None
-            except Exception as e:
-                raise Exception(f"Failed to unpack step result at step={step}: {e}")
 
-            # reward between 0.1 to 0.99 for hackathon
-            reward = 0.01 + ((max(-1.0, min(1.0, reward)) + 1.0) / 2.0) * 0.98
+                # Map reward from [-1, 1] to [0.01, 0.99] for hackathon scoring.
+                reward = 0.01 + ((max(-1.0, min(1.0, reward)) + 1.0) / 2.0) * 0.98
 
-            rewards.append(reward)
-            steps_taken = step
-            last_reward = reward
+                rewards.append(reward)
+                steps_taken = step
+                last_reward = reward
 
-            log_step(
-                step=step,
-                action=f"{action.action_type.name}",
-                reward=reward,
-                done=done,
-                error=error,
-            )
+                log_step(
+                    step=step,
+                    action=f"{action.action_type.name}",
+                    reward=reward,
+                    done=done,
+                    error=error,
+                )
 
-            history.append(
-                f"Step {step}: {action.action_type.name} (reward={reward:+.3f})"
-            )
+                history.append(
+                    f"Step {step}: {action.action_type.name} (reward={reward:+.3f})"
+                )
 
-            if done:
-                break
+                if done:
+                    break
 
-        # Use episode grade as final score
-        if steps_taken >= MAX_STEPS or (result and result.done):
-            try:
+            # Evaluate each run against the corresponding grader.
+            if steps_taken >= MAX_STEPS or (result and result.done):
                 state = await env.state()
                 episode_stats = state.episode_stats
                 grades = grade_all(episode_stats)
-                score = (grades["easy"] + grades["medium"] + grades["hard"]) / 3.0
+                score = grades.get(grade_key, 0.0)
                 success = score >= SUCCESS_SCORE_THRESHOLD
-            except Exception as e:
-                raise Exception(f"Could not compute grades: {e}")
-
-    except Exception as e:
-        raise Exception(f"Unhandled exception in episode loop: {e}")
-    finally:
-        try:
-            await env.close()
-        except Exception as e:
-            # Docker stop timed out, attempt force kill
+        except Exception:
+            pass
+        finally:
             try:
-                if hasattr(env, "_container_id"):
-                    subprocess.run(
-                        ["docker", "kill", env._container_id],
-                        timeout=5,
-                        capture_output=True,
-                    )
-            except Exception as e:
-                raise Exception(f"env.close() failed (container cleanup): {e}")
+                await env.close()
+            except Exception:
+                # Docker stop timed out, attempt force kill.
+                try:
+                    if hasattr(env, "_container_id"):
+                        subprocess.run(
+                            ["docker", "kill", env._container_id],
+                            timeout=5,
+                            capture_output=True,
+                        )
+                except Exception:
+                    pass
 
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+            log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
 if __name__ == "__main__":
