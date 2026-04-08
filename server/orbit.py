@@ -74,9 +74,9 @@ class OrbitMixin:
         """Generate a randomised imaging request for the episode."""
         priorities = list(Priority)
         modes = list(ImagingMode)
-        deadline = arrival + self._rng.randint(
-            EPISODE_DURATION_SEC // 4, EPISODE_DURATION_SEC - arrival
-        )
+        min_deadline_offset = EPISODE_DURATION_SEC // 4
+        max_deadline_offset = max(min_deadline_offset, EPISODE_DURATION_SEC - arrival)
+        deadline = arrival + self._rng.randint(min_deadline_offset, max_deadline_offset)
         deadline = min(deadline, EPISODE_DURATION_SEC)
         return TargetRequest(
             request_id=self._rng.randint(1, 1000),
