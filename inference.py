@@ -57,7 +57,7 @@ except ImportError as e:
     # print(f"[DEBUG] Failed to import grader: {e}", flush=True)
     raise
 
-IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "openenv-satellite_scheduler:latest")
+IMAGE_NAME = os.getenv("IMAGE_NAME", "openenv-satellite_scheduler:latest")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
