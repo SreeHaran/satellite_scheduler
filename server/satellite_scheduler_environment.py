@@ -96,7 +96,7 @@ class SatelliteSchedulerEnvironment(
         self._attitude: str = "sun"
         self._busy_status: str = "idle"
         self._remaining_action_steps: int = 0
-        self._battery_level: float = 90.0
+        self._battery_level: float = 75.0
         self._storage_used: float = 0.0
         self._raw_data_amount: float = 0.0
         self._compressed_data_amount: float = 0.0
