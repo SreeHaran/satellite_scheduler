@@ -43,7 +43,7 @@ app = create_app(
     SatelliteSchedulerAction,
     SatelliteSchedulerObservation,
     env_name="satellite_scheduler",
-    max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
+    max_concurrent_envs=100,  # increase this number to allow more concurrent WebSocket sessions
 )
 
 

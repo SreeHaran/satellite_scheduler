@@ -137,11 +137,11 @@ class SatelliteSchedulerState(State):
 # Constants (shared between server and client for reference)
 # ---------------------------------------------------------------------------
 
-EPISODE_DURATION_SEC = 1500  # 25 minutes for hackathon. But should be 90 minutes
+EPISODE_DURATION_SEC = 5400  # 90 minutes
 STEP_DURATION_SEC = 30
 MAX_STEPS = (
     EPISODE_DURATION_SEC // STEP_DURATION_SEC
-)  # 50 for hackathon, but should be 180 for 90-minute episode
+)  # 180 steps per episode at 30s per step
 
 BATTERY_MAX = 100.0
 STORAGE_CAPACITY = 30.0  # GB

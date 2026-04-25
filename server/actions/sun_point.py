@@ -33,12 +33,12 @@ class SunPointMixin:
             self._drain_battery(WAIT_BATTERY_COST)
             return -0.4
 
-        if self._battery_level >= BATTERY_MAX:
+        if self._battery_level >= BATTERY_MAX - (SUN_CHARGE_PER_STEP / 2):
             # Already full, just waste a step
             self._current_time += STEP_DURATION_SEC
             self._drain_battery(WAIT_BATTERY_COST)
             self._total_stalling_steps += 1
-            return -0.05
+            return -0.5
 
         src_cat = _attitude_category(self._attitude)
         slew_steps = SLEW_STEPS.get(src_cat, {}).get("sun", 0)
@@ -83,4 +83,4 @@ class SunPointMixin:
         )
         gained = self._battery_level - old_battery
         self._total_battery_gained += gained
-        return 0.1
+        return 0.01 * gained
