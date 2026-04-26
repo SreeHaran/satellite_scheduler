@@ -6,3 +6,13 @@ type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
+tasks:
+  - id: task_easy
+    grader: grade/task_easy
+    description: Priority-aware mission planning - schedule as many high-priority observations as possible while respecting satellite constraints.
+  - id: task_medium
+    grader: grade/task_medium
+    description: Storage-flow efficiency - optimize data downlink scheduling to maximize storage availability for new observations.
+  - id: task_hard
+    grader: grade/task_hard
+    description: Holistic scheduling - create observation schedules that balance priority, context, and overall mission goals (e.g. diversity of targets, long-term planning).

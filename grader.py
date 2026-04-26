@@ -9,6 +9,8 @@ Three difficulty levels defined by the spec:
 
 from typing import Any, Dict
 
+from server import app
+
 try:
     from .models import PRIORITY_WEIGHT, SUN_CHARGE_PER_STEP
 except ImportError:
@@ -31,6 +33,7 @@ def _safe_div(numerator: float, denominator: float, default: float = 0.0) -> flo
 # ---------------------------------------------------------------------------
 
 
+@app.get("/grade/task_easy")
 def grade_easy(episode_stats: Dict[str, Any]) -> float:
     """
     Score = sum(priority_weight for completed requests)
@@ -58,6 +61,7 @@ def grade_easy(episode_stats: Dict[str, Any]) -> float:
 # ---------------------------------------------------------------------------
 
 
+@app.get("/grade/task_medium")
 def grade_medium(episode_stats: Dict[str, Any]) -> float:
     """
     score = 0.50 * (data_downlinked / data_compressed)
@@ -95,6 +99,7 @@ def grade_medium(episode_stats: Dict[str, Any]) -> float:
 # ---------------------------------------------------------------------------
 
 
+@app.get("/grade/task_hard")
 def grade_hard(episode_stats: Dict[str, Any]) -> float:
     """
     downlinked_data_fraction = total_data_downlinked / total_data_generated
