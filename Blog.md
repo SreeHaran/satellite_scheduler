@@ -89,6 +89,7 @@ I loaded the pre-trained SFT model for GRPO training. However, I faced a major i
 - Training became **extremely slow** (~156 hours for full training)
 - Querying the environment for each step was expensive
 - **WebSocket connections timed out** or closed unexpectedly during long episodes
+- Unsloth didn't support multiple GPU training
 
 **Solution:** Instead of calculating rewards at the end of the episode, I wrote **rule-based reward functions** that score each step independently with no websocket environment interaction needed during training.
 
