@@ -26,7 +26,7 @@ An RL environment simulating a low-Earth-orbit (LEO) satellite that must schedul
 [GRPO training notebook link (also attached to this repo)](training/grpo_training.ipynb)
 
 
-## Problem Statement
+![README_BANNER](assets/for_readme.png)
 
 Real LEO Earth-observation satellites face a hard resource-scheduling problem: they must serve a continuously arriving stream of ground imaging requests while simultaneously managing three scarce, time-coupled resources — **battery**, **onboard storage**, and **ground-station contact time**.
 
