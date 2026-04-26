@@ -104,6 +104,7 @@ I loaded the pre-trained SFT model for GRPO training. However, I faced a major i
 ![reward_graph_3](assets/grpo_data/reward_graph_3.png)
 ![rewards_graph_1_2](assets/grpo_data/reward_graphs_1_2.png)
 
+The reward graph of context appropriateness, we can clearly imply that the agent has now learned to predict the relevant and appropriate action for the current state without running into negative rewards.
 
 ### Loss Curve
 
