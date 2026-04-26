@@ -61,7 +61,7 @@ TASK_HARD = os.getenv("SATELLITE_SCHEDULER_TASK_HARD", "closed_loop_mission_plan
 
 BENCHMARK = os.getenv("SATELLITE_SCHEDULER_BENCHMARK", "satellite_scheduler")
 
-MAX_STEPS = 50  # Reduced to meet hackathon requirements of execution within 20 minutes(in vcpu=2, memory=8gb), Its best to run with 180 steps
+MAX_STEPS = 180
 TEMPERATURE = 0.7
 MAX_TOKENS = 200
 SUCCESS_SCORE_THRESHOLD = 0.5

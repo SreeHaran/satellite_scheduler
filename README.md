@@ -15,6 +15,17 @@ tags:
 
 An RL environment simulating a low-Earth-orbit (LEO) satellite that must schedule imaging tasks, manage battery via sun-pointing, compress captured data, and downlink results during ground-station visibility windows — all within a 90-minute orbital episode.
 
+[Blog link](Blog.md)
+
+[Space link](https://huggingface.co/spaces/Sreeharan/satellite_scheduler)
+
+[Github link](https://github.com/SreeHaran/satellite_scheduler)
+
+[SFT training notebook link (also attached to this repo)](training/sft_training.ipynb)
+
+[GRPO training notebook link (also attached to this repo)](training/grpo_training.ipynb)
+
+
 ## Problem Statement
 
 Real LEO Earth-observation satellites face a hard resource-scheduling problem: they must serve a continuously arriving stream of ground imaging requests while simultaneously managing three scarce, time-coupled resources — **battery**, **onboard storage**, and **ground-station contact time**.
@@ -40,15 +51,7 @@ The agent must learn to:
 4. **Manage energy** — charge proactively during sunlit windows before battery drops critical.
 5. **Recover from mistakes** — use `abort_task` when a better opportunity appears mid-action.
 
-## Agent Tasks
 
-| Task | What the agent must do |
-|---|---|
-| **Capture** | Slew to a pending target and image it before its deadline; choose which request to serve first based on priority and time-to-deadline. |
-| **Compress** | After capture, compress raw data to free storage and prepare data for downlink. Must be done before the next GS pass to maximise throughput. |
-| **Downlink** | Transmit all compressed data to the ground station during the visibility window. Windows are ~10 minutes long; missing one wastes the whole capture pipeline. |
-| **Charge** | Point at the sun during sunlit windows to replenish the battery. Must prevent the battery from hitting 0 (episode-terminating failure). |
-| **Schedule** | Decide at every step whether to capture, compress, downlink, charge, or wait — balancing all four tasks simultaneously in the face of strict time and resource constraints. |
 
 ## Graders
 
@@ -143,13 +146,66 @@ with SatelliteSchedulerEnv(base_url="http://localhost:8000").sync() as env:
     print(f"Attitude: {result.observation.attitude}")
 ```
 
+## Repository Structure
+
+```
+satellite_scheduler/
+├── client.py                    # SatelliteSchedulerEnv — async WebSocket client for the environment
+├── models.py                    # Pydantic data models (Action, Observation, ActionType, TargetRequest, etc.)
+├── grader.py                    # Three grading functions: grade_easy, grade_medium, grade_hard, grade_all
+├── inference.py                 # Reference inference loop — runs a full episode with an OpenAI-compatible LLM
+├── validate-submission.sh       # End-to-end validation script for submissions
+├── Dockerfile                   # Docker image for the environment server
+├── openenv.yaml                 # OpenEnv deployment config
+├── pyproject.toml               # Python project metadata and dependencies
+│
+├── server/                      # Environment server (runs the simulation)
+│   ├── app.py                   # FastAPI + WebSocket entry point
+│   ├── satellite_scheduler_environment.py  # Core simulation logic (orbit, resources, step function)
+│   ├── orbit.py                 # Orbital mechanics — sunlit/eclipse windows, ground-station visibility
+│   ├── metrics.py               # Episode statistics accumulator for graders
+│   ├── requirements.txt         # Server-specific dependencies
+│   └── actions/                 # One module per action type
+│       ├── capture.py           # capture_image — slew + image acquisition
+│       ├── compress.py          # compress_data — raw → compressed conversion
+│       ├── downlink.py          # downlink_to_station — transmit during GS pass
+│       ├── sun_point.py         # sun_point_for_charging — solar panel charging
+│       └── wait_abort.py        # wait + abort_task handlers
+│
+├── dataset/                     # Training data (generated from expert rollouts)
+│   ├── sft_training.jsonl       # 5,000 (system, prompt, completion) examples for SFT
+│   ├── sft_validation.jsonl     # Validation split for SFT
+│   └── grpo_training.jsonl      # Prompt + gold-action pairs for GRPO reward functions
+│
+├── training/                    # Training notebooks (run on Kaggle)
+│   ├── sft_training.ipynb       # Supervised fine-tuning notebook
+│   └── grpo-training.ipynb      # GRPO reinforcement learning notebook
+│
+├── outputs/                     # Trained model artifacts - ignored by git
+│   ├── lora_adapter/            # LoRA adapter weights (safetensors + tokenizer)
+│   │   ├── adapter_config.json
+│   │   ├── adapter_model.safetensors
+│   │   ├── chat_template.jinja
+│   │   ├── tokenizer.json
+│   │   └── tokenizer_config.json
+│   └── sft_training_loss.png    # SFT training loss curve
+│
+└── assets/                      # Images and diagrams for documentation
+    ├── actions.png
+    ├── state variables.png
+    ├── grpo_on_full_episode/            # Full episode visualizations
+    ├── grpo_data/               # GRPO training plots
+    └── sft_loss/                # SFT loss curves
+```
+
+
 ## Episode Details
 
 | Parameter | Value |
 |---|---|
 | Episode length | 90 minutes (5400 s) |
 | Step duration | 30 seconds |
-| Steps per episode | 180 (50 in inference.py to adhere hackathon requirements) |
+| Steps per episode | 180  |
 | Initial battery | 90 / 100 |
 | Initial attitude | sun |
 
